@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import HomePage from "./pages/HomePage";
@@ -15,13 +15,52 @@ import TutorialsPage from "./pages/TutorialsPage";
 import AboutPage from "./pages/AboutPage";
 import WebsiteDevTeamPage from "./pages/WebsiteDevTeamPage";
 import NotFound from "./pages/NotFound";
+import AdminPage from "./pages/AdminPage";
 import ScrollToTop from "./components/ScrollToTop";
 import { useLenis } from "./hooks/useLenis";
 import { useEffect, useState } from "react";
 import Loader from "./components/ui/Loader";
 import InventoryPage from './pages/InventoryPage';
+import CheckFinePage from "./pages/CheckFinePage";
 
 const queryClient = new QueryClient();
+
+const AppLayout = ({
+  loaderMounted,
+  loaderVisible,
+}: {
+  loaderMounted: boolean;
+  loaderVisible: boolean;
+}) => {
+  const location = useLocation();
+  const hideHeader = location.pathname === "/admin" || location.pathname.startsWith("/admin/");
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {loaderMounted && <Loader visible={loaderVisible} />}
+      {!hideHeader && <Header />}
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/members" element={<TeamPage />} />
+          <Route path="/team" element={<Navigate to="/" replace />} />
+          <Route path="/achievements" element={<AchievementsPage />} />
+          <Route path="/timeline" element={<TimelinePage />} />
+          <Route path="/alumni" element={<AlumniPage />} />
+          <Route path="/tutorials" element={<TutorialsPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/website-dev-team" element={<WebsiteDevTeamPage />} />
+          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/check-fine" element={<CheckFinePage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </div>
+  );
+};
 
 const App = () => {
   // Initialize Lenis smooth scrolling
@@ -81,27 +120,7 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <ScrollToTop />
-          <div className="min-h-screen bg-background flex flex-col">
-            {loaderMounted && <Loader visible={loaderVisible} />}
-            <Header />
-            <main className="flex-1">
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/events" element={<EventsPage />} />
-                <Route path="/members" element={<TeamPage />} />
-                <Route path="/team" element={<Navigate to="/" replace />} />
-                <Route path="/achievements" element={<AchievementsPage />} />
-                <Route path="/timeline" element={<TimelinePage />} />
-                <Route path="/alumni" element={<AlumniPage />} />
-                <Route path="/tutorials" element={<TutorialsPage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/website-dev-team" element={<WebsiteDevTeamPage />} />
-                <Route path="/inventory" element={<InventoryPage />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-          </div>
+          <AppLayout loaderMounted={loaderMounted} loaderVisible={loaderVisible} />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

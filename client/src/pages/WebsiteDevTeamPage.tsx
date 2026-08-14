@@ -22,7 +22,7 @@ const WebsiteDevTeamPage = () => {
                 />
               ) : slot === 2 ? (
                 <img
-                  src="https://media.licdn.com/dms/image/v2/D5603AQEPuOVaTVEQ4w/profile-displayphoto-scale_400_400/B56ZyL7ElSGwAg-/0/1771874050621?e=1773273600&v=beta&t=_P1WbRkoYHi1nPbyeItSzXs2PbhsXJFiCHAECu5p5Ec"
+                  src="https://media.licdn.com/dms/image/v2/D5603AQFOVeV0fPbd3Q/profile-displayphoto-scale_400_400/B56ZyO._AZIIAg-/0/1771925406230?e=1773878400&v=beta&t=Np-Ub5yPPiI93QgyixQlhKTSP3sb42sA_Ad0Gqa9LN0"
                   alt="Indrajit Jena"
                   className="h-20 w-20 rounded-full border-2 border-white/40 shrink-0 object-cover"
                   loading="lazy"
@@ -43,7 +43,7 @@ const WebsiteDevTeamPage = () => {
                     <p className="font-semibold text-white text-lg">Ankush Sahoo</p>
                     <p className="text-sm text-white/80 mt-1">Head Website Developer</p>
                     <p className="text-sm text-white/70 mt-1">Robostreaks Event Manager, Coding Head</p>
-                    <p className="text-sm text-white/70 mt-1">Electrinics and telecomunication engineering</p>
+                    <p className="text-sm text-white/70 mt-1">Electronics and Telecomunication Engineering</p>
                     <div className="flex items-center gap-3 mt-3 text-white/80">
                       <a href="#" aria-label="Email" className="hover:text-white transition-colors">
                         <Mail className="h-4 w-4" />

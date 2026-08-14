@@ -8,6 +8,45 @@ import Transaction from '../models/Transaction.js';
 import { protect, adminOnly } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+const MIN_RECAPTCHA_SCORE = 0.5;
+
+const verifyRecaptchaV3 = async ({ token, action, remoteIp }) => {
+    if (!process.env.RECAPTCHA_SECRET_KEY) {
+        throw new Error('reCAPTCHA secret key is not configured on the server.');
+    }
+
+    const body = new URLSearchParams({
+        secret: process.env.RECAPTCHA_SECRET_KEY,
+        response: token,
+    });
+
+    if (remoteIp) {
+        body.append('remoteip', remoteIp);
+    }
+
+    const googleResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body,
+    });
+
+    const payload = await googleResponse.json();
+    const score = typeof payload.score === 'number' ? payload.score : 0;
+
+    const isValid =
+        payload.success === true &&
+        payload.action === action &&
+        score >= MIN_RECAPTCHA_SCORE;
+
+    return {
+        isValid,
+        score,
+        action: payload.action,
+        errors: payload['error-codes'] || [],
+    };
+};
 
 // ==========================================
 // 1. PUBLIC APIS
@@ -22,10 +61,24 @@ router.get('/api/public/inventory', async (req, res) => {
 });
 
 router.post('/api/public/inventory/request', async (req, res) => {
-    const { items, studentName, rollNumber, days, clubRegNo, phoneNumber, email, purpose } = req.body;
+    const { items, studentName, rollNumber, days, clubRegNo, phoneNumber, email, purpose, recaptchaToken } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "Cart is empty" });
+    if (!recaptchaToken) return res.status(400).json({ error: 'reCAPTCHA verification is required.' });
 
     try {
+        const recaptchaResult = await verifyRecaptchaV3({
+            token: recaptchaToken,
+            action: 'inventory_checkout',
+            remoteIp: req.ip,
+        });
+
+        if (!recaptchaResult.isValid) {
+            return res.status(400).json({
+                error: 'reCAPTCHA verification failed. Please try again.',
+                details: recaptchaResult.errors,
+            });
+        }
+
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + parseInt(days || 7));
 
@@ -227,7 +280,18 @@ router.post('/create-admin', protect, adminOnly, async (req, res) => {
 // DELETE ADMIN (Super Admin Only)
 router.post('/delete-admin', protect, adminOnly, async (req, res) => {
     try {
-        if (req.body.userId !== req.user.id) await User.findByIdAndDelete(req.body.userId);
+        const targetUserId = String(req.body.userId ?? '').trim();
+        if (!targetUserId) {
+            return res.status(400).send('Error deleting user');
+        }
+
+        await User.findByIdAndDelete(targetUserId);
+
+        if (targetUserId === String(req.user.id)) {
+            res.clearCookie('token');
+            return res.redirect('/admin/login');
+        }
+
         res.redirect('/admin/dashboard');
     } catch(e) { res.send("Error deleting user"); }
 });

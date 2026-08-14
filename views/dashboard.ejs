@@ -24,6 +24,32 @@
         .content-area { flex: 1; padding: 30px; overflow-y: auto; }
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 
+        .inventory-layout { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; }
+        .users-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            body { flex-direction: column; height: auto; overflow: auto; }
+            .sidebar { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; }
+            .brand { border-bottom: none; border-right: 1px solid var(--border); white-space: nowrap; }
+            .nav-group-title { display: none; }
+            .nav-item { white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
+            .nav-item.active { border-left: none; border-bottom: 3px solid var(--accent); }
+            .main-content { height: auto; }
+            .content-area { padding: 16px; }
+            .top-bar { padding: 12px 16px; position: sticky; top: 0; z-index: 20; }
+            .inventory-layout { grid-template-columns: 1fr; }
+            .users-layout { grid-template-columns: 1fr; }
+            table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .modal { width: calc(100vw - 24px); max-width: 800px; }
+        }
+
+        @media (max-width: 480px) {
+            .content-area { padding: 12px; }
+            .grid-container { grid-template-columns: 1fr; }
+            .modal { padding: 16px; }
+        }
+
         /* Components */
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; transition: 0.2s; position: relative; display: flex; flex-direction: column; }
         .card-img { width: 100%; height: 150px; object-fit: cover; border-radius: 4px; margin-bottom: 10px; background: #21262d; }
@@ -118,7 +144,7 @@
         <div class="top-bar"><div class="page-title">Component Inventory</div></div>
         <div class="content-area">
             <div id="notificationArea"></div>
-            <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 20px;">
+            <div class="inventory-layout">
                 <div>
                     <div style="border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 15px;" class="flex-between">
                         <h3 style="margin:0;">Available Components</h3>
@@ -157,7 +183,7 @@
     <div id="usersPanel" class="main-content panel">
         <div class="top-bar"><div class="page-title">Manage Admin Access</div></div>
         <div class="content-area">
-            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px;">
+            <div class="users-layout">
                 <div class="card">
                     <h3 style="color:var(--accent); margin-bottom:15px;">Add New Admin</h3>
                     <form action="/admin/create-admin" method="POST">
@@ -177,9 +203,7 @@
                                     <td><%= u.username %></td>
                                     <td><span style="padding:2px 8px; border-radius:4px; font-size:0.8rem; border:1px solid #30363d; color:<%= u.role === 'superadmin' ? '#58a6ff' : 'white' %>"><%= u.role %></span></td>
                                     <td>
-                                        <% if(u.username !== user.username) { %>
-                                            <form action="/admin/delete-admin" method="POST" onsubmit="return confirm('Delete this user?');"><input type="hidden" name="userId" value="<%= u._id %>"><button class="btn btn-icon" style="color:#da3633;"><i class="fas fa-trash"></i></button></form>
-                                        <% } else { %><span style="color:#8b949e; font-size:0.8rem;">(You)</span><% } %>
+                                        <form action="/admin/delete-admin" method="POST" onsubmit="return confirm('Delete this user?');"><input type="hidden" name="userId" value="<%= u._id %>"><button class="btn btn-icon" style="color:#da3633;"><i class="fas fa-trash"></i></button></form>
                                     </td>
                                 </tr>
                             <% }); %>

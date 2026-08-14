@@ -1,7 +1,9 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Calendar, ExternalLink } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface EventItem {
-  id: number;
+  id: string;
   title: string;
   date: string;
   description: string;
@@ -10,57 +12,6 @@ interface EventItem {
 }
 
 const REGISTRATION_URL = 'https://robomania.robostreakspmec.com/';
-
-const upcomingEvents: EventItem[] = [
-  {
-    id: 1,
-    title: 'Robo Race 2026',
-    date: 'March 6-7, 2026',
-    description:
-      'Robo Race 2025 is an exciting competition where teams of students design and build robots to compete in a series of challenges. This event promotes creativity, engineering skills, and teamwork among participants.',
-    image: '/assets/event/robo-race.png',
-    status: 'upcoming',
-  },
-  {
-    id: 2,
-    title: 'Robo Sumo 2026',
-    date: 'March 6-7, 2026',
-    description:
-      'Robo Sumo 2025 is an exhilarating competition where teams of students design and build robots to compete in a sumo wrestling format. The objective is to push the opponent\'s robot out of the ring, showcasing strength, strategy, and engineering skills.',
-    image: '/assets/event/robosumo.jpg',
-    status: 'upcoming',
-  },
-  {
-    id: 3,
-    title: 'Line Follower 2026',
-    date: 'March 6-7, 2026',
-    description:
-      'Line Follower 2026 is an exciting competition where teams of students design and build robots to follow a line on the ground. This event promotes creativity, engineering skills, and teamwork among participants.',
-    image: '/assets/event/line%20follower.png',
-    status: 'upcoming',
-  },
-  {
-    id: 4,
-    title: 'Hardware Hackathon 2026',
-    date: 'March 6-7, 2026',
-    description:
-      'A 12-hour intensive hackathon focused on hardware development. The event spans 2 days: 6 hours + 6 hours on Day 1, and 6 hours on Day 2. Teams collaborate to innovate and build cutting-edge hardware solutions.',
-    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRJCoelJEJL02nAdQ63XDz7IsCaG1laLXPe5A&s',
-    status: 'upcoming',
-  },
-];
-
-const pastEvents: EventItem[] = [
-  {
-    id: 4,
-    title: 'ROBO EXPO',
-    date: 'September 2025',
-    description:
-      'ROBO EXPO brought together student innovators to showcase robotics prototypes, practical engineering concepts, and project demonstrations in front of peers and mentors.',
-    image: '/assets/event/roboexpo.jpeg',
-    status: 'completed',
-  },
-];
 
 const EventCard = ({ event }: { event: EventItem }) => {
   const isUpcoming = event.status === 'upcoming';
@@ -123,6 +74,45 @@ const EventCard = ({ event }: { event: EventItem }) => {
 };
 
 const EventsPage = () => {
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      setIsLoading(true);
+      setError('');
+
+      const { data, error: fetchError } = await supabase
+        .from('events')
+        .select('id, event_name, event_date, description, pic_link, status')
+        .order('event_date', { ascending: false });
+
+      if (fetchError) {
+        setError(fetchError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const mapped = (data ?? []).map((eventItem: Record<string, unknown>) => ({
+        id: String(eventItem.id ?? crypto.randomUUID()),
+        title: String(eventItem.event_name ?? 'Untitled Event'),
+        date: String(eventItem.event_date ?? '').slice(0, 10),
+        description: String(eventItem.description ?? ''),
+        image: String(eventItem.pic_link ?? '/assets/event/roboexpo.jpeg'),
+        status: String(eventItem.status ?? 'upcoming') === 'completed' ? 'completed' : 'upcoming',
+      }));
+
+      setEvents(mapped);
+      setIsLoading(false);
+    };
+
+    void loadEvents();
+  }, []);
+
+  const upcomingEvents = useMemo(() => events.filter((event) => event.status === 'upcoming'), [events]);
+  const pastEvents = useMemo(() => events.filter((event) => event.status === 'completed'), [events]);
+
   return (
     <div className="pt-24 min-h-screen bg-black text-white">
       <div className="container mx-auto px-4 py-12">
@@ -133,23 +123,31 @@ const EventsPage = () => {
           </p>
         </div>
 
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold mb-8">Upcoming Events</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {upcomingEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </div>
-        </section>
+        {error ? (
+          <div className="text-red-400">Failed to load events: {error}</div>
+        ) : isLoading ? (
+          <div className="text-zinc-300">Loading events...</div>
+        ) : (
+          <>
+            <section className="mb-16">
+              <h2 className="text-3xl font-bold mb-8">Upcoming Events</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {upcomingEvents.map((event) => (
+                  <EventCard key={event.id} event={event} />
+                ))}
+              </div>
+            </section>
 
-        <section>
-          <h2 className="text-3xl font-bold mb-8">Past Events</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {pastEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </div>
-        </section>
+            <section>
+              <h2 className="text-3xl font-bold mb-8">Past Events</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {pastEvents.map((event) => (
+                  <EventCard key={event.id} event={event} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </div>
   );

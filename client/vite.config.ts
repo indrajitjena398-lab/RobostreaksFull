@@ -8,7 +8,7 @@ export default defineConfig({
     host: true, // <--- ALLOWS ACCESS FROM LOCAL NETWORK (Changes localhost to 0.0.0.0)
     port: 8080,
     proxy: {
-      '/admin': {
+      '/admin/api': {
         target: 'http://127.0.0.1:5000', // Keeps talking to backend internally
         changeOrigin: true,
         secure: false,

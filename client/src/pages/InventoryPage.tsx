@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search, FileText, Plus, Package, ShoppingCart, X, Trash2, Mail, User, Phone, FileCheck, CheckCircle } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface ComponentItem {
   _id: string;
@@ -27,6 +28,37 @@ interface CheckoutFormData {
   verificationChecked: boolean;
   termsChecked: boolean;
 }
+
+interface ApprovedRequestRow {
+  component_id: string | null;
+  quantity: number | null;
+}
+
+interface FineEntry {
+  id: string;
+  regdNo: string;
+  status?: "pending" | "paid";
+}
+
+const FINE_STORAGE_KEY = 'robostreaks-fine-entries';
+
+const hasUnpaidFine = (regdNo: string) => {
+  const normalizedRegNo = regdNo.trim().toLowerCase();
+  if (!normalizedRegNo) {
+    return false;
+  }
+
+  try {
+    const rawFines = localStorage.getItem(FINE_STORAGE_KEY);
+    const fineEntries: FineEntry[] = rawFines ? JSON.parse(rawFines) : [];
+
+    return fineEntries.some(
+      (fine) => fine.regdNo.trim().toLowerCase() === normalizedRegNo && fine.status !== 'paid',
+    );
+  } catch {
+    return false;
+  }
+};
 
 const catalog: ComponentItem[] = [
   { _id: 'c1', category: 'Microcontrollers', name: 'Seeed Studio XIAO ESP32C6', availableStock: 1, totalStock: 1, description: 'Ultra-small development board powered by ESP32-C6 SoC, supporting Wi-Fi 6, Bluetooth 5.3, Zigbee, and Matter. Features RISC-V 32-bit processor.', image: 'https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRHdZQG4YebdytWDA8Ohg6HMTuR0k705iRSbQkbfuN304N4DxwYVYr2TZJAM6tnvxBT7ehEGBjKMsV1Wm6SshNsby8o6qh8ohJ2B9wVgwwJnTtNG0SOA6PYRA', datasheet: '#' },
@@ -84,12 +116,16 @@ const catalog: ComponentItem[] = [
 ];
 
 const InventoryPage = () => {
-  const [components] = useState<ComponentItem[]>(catalog);
+  const [components, setComponents] = useState<ComponentItem[]>(catalog);
+  const [isLoadingComponents, setIsLoadingComponents] = useState(true);
+  const [componentsError, setComponentsError] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('All');
   const [showCheckout, setShowCheckout] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
   const [submittedCart, setSubmittedCart] = useState<CartItem[]>([]);
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: '',
@@ -146,40 +182,125 @@ const InventoryPage = () => {
     );
   };
 
-  const handleFormChange = (field: keyof CheckoutFormData, value: any) => {
+  const handleFormChange = (field: keyof CheckoutFormData, value: string | boolean) => {
+    if (field === 'clubRegNo' || field === 'name' || field === 'phoneNumber' || field === 'email' || field === 'purposeOfIssue' || field === 'returnDate') {
+      setCheckoutError('');
+    }
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleCheckout = () => {
+  useEffect(() => {
+    const loadComponents = async () => {
+      setIsLoadingComponents(true);
+      setComponentsError('');
+
+      const [componentsResult, approvedRequestsResult] = await Promise.all([
+        supabase.from('components_list').select('*').order('created_at', { ascending: false }),
+        supabase.from('component_status').select('component_id, quantity').eq('status', 'approved'),
+      ]);
+
+      if (componentsResult.error || approvedRequestsResult.error) {
+        setComponentsError((componentsResult.error || approvedRequestsResult.error)?.message ?? 'Failed to load inventory');
+        setIsLoadingComponents(false);
+        return;
+      }
+
+      const approvedRequests = (approvedRequestsResult.data ?? []) as ApprovedRequestRow[];
+      const approvedCountByComponentId = approvedRequests.reduce((accumulator, request) => {
+        if (!request.component_id) {
+          return accumulator;
+        }
+
+        const quantity = Number(request.quantity ?? 1);
+        accumulator.set(request.component_id, (accumulator.get(request.component_id) ?? 0) + (Number.isNaN(quantity) ? 1 : quantity));
+        return accumulator;
+      }, new Map<string, number>());
+
+      const mapped = (componentsResult.data ?? []).map((item: Record<string, unknown>) => {
+        const totalStock = Number(item.totalStock ?? item.total_stock ?? 1);
+        const safeTotalStock = Number.isNaN(totalStock) ? 1 : totalStock;
+        const approvedIssued = approvedCountByComponentId.get(String(item.id ?? '')) ?? 0;
+        const availableStock = Math.max(0, safeTotalStock - approvedIssued);
+
+        return {
+          _id: String(item.id ?? ''),
+          name: String(item.name ?? 'Unnamed Component'),
+          category: String(item.category ?? 'General'),
+          totalStock: safeTotalStock,
+          availableStock,
+          stockStatus: String(item.stockStatus ?? item.stock_status ?? 'Available'),
+          image: String(item.image ?? item.pic_link ?? ''),
+          description: String(item.description ?? ''),
+          datasheet: String(item.datasheet ?? '#'),
+        } as ComponentItem;
+      });
+
+      setComponents(mapped);
+      setIsLoadingComponents(false);
+    };
+
+    void loadComponents();
+  }, []);
+
+  const handleCheckout = async () => {
+    setCheckoutError('');
+
     if (!formData.name || !formData.clubRegNo || !formData.phoneNumber || !formData.email || !formData.purposeOfIssue || !formData.returnDate) {
-      alert('Please fill in all required fields');
+      setCheckoutError('Please fill in all required fields.');
       return;
     }
     if (!formData.verificationChecked || !formData.termsChecked) {
-      alert('Please agree to verification and terms & conditions');
+      setCheckoutError('Please agree to verification and terms & conditions.');
       return;
     }
-    console.log('Checkout Data:', { cart, formData });
-    
-    // Save submitted cart items and show success modal
-    setSubmittedCart([...cart]);
-    setShowCheckout(false);
-    setShowSuccess(true);
-    
-    // Reset cart and form after showing success
-    setTimeout(() => {
-      setCart([]);
-      setFormData({
-        name: '',
-        clubRegNo: '',
-        phoneNumber: '',
-        email: '',
-        purposeOfIssue: '',
-        returnDate: '',
-        verificationChecked: false,
-        termsChecked: false,
-      });
-    }, 500);
+
+    if (hasUnpaidFine(formData.clubRegNo)) {
+      setCheckoutError('You already have an unpaid fine. You cannot issue any components until the fine is cleared. Contact the Robostreaks coordinators.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const requestRows = cart.map((item) => ({
+        student_name: formData.name,
+        club_reg_no: formData.clubRegNo,
+        phone_number: formData.phoneNumber,
+        email_address: formData.email,
+        purpose_of_issue: formData.purposeOfIssue,
+        return_date: formData.returnDate,
+        quantity: item.quantity,
+        component_id: item._id,
+        status: 'pending' as const,
+      }));
+
+      const { error: insertError } = await supabase.from('component_status').insert(requestRows);
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
+      setSubmittedCart([...cart]);
+      setShowCheckout(false);
+      setShowSuccess(true);
+
+      setTimeout(() => {
+        setCart([]);
+        setFormData({
+          name: '',
+          clubRegNo: '',
+          phoneNumber: '',
+          email: '',
+          purposeOfIssue: '',
+          returnDate: '',
+          verificationChecked: false,
+          termsChecked: false,
+        });
+      }, 500);
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : 'Checkout failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -219,7 +340,11 @@ const InventoryPage = () => {
           </div>
         </div>
 
-        {filteredComponents.length === 0 ? (
+        {componentsError ? (
+          <div className="text-center text-red-400 py-16">Failed to load components: {componentsError}</div>
+        ) : isLoadingComponents ? (
+          <div className="text-center text-gray-400 py-16">Loading components...</div>
+        ) : filteredComponents.length === 0 ? (
           <div className="text-center text-gray-400 py-16">No components found.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -261,9 +386,9 @@ const InventoryPage = () => {
                   <div className="p-4 flex flex-col gap-2 flex-1">
                     <p className="text-blue-500 text-[10px] uppercase font-bold tracking-widest">{item.category}</p>
                     <h2 className="text-white font-semibold text-lg leading-snug line-clamp-2">{item.name}</h2>
-                    <p className="text-gray-400 text-xs leading-relaxed line-clamp-3">
-                      {item.description || 'No description available.'}
-                    </p>
+                    {item.description ? (
+                      <p className="text-gray-400 text-xs leading-relaxed line-clamp-3">{item.description}</p>
+                    ) : null}
 
                     <div className="mt-auto">
                       {item.datasheet ? (
@@ -480,17 +605,29 @@ const InventoryPage = () => {
               <div className="flex gap-4 border-t border-gray-700 pt-6">
                 <button
                   onClick={() => setShowCheckout(false)}
+                  disabled={isSubmitting}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCheckout}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
                 >
-                  Complete Checkout
+                  {isSubmitting ? 'Verifying...' : 'Complete Checkout'}
                 </button>
               </div>
+
+              {checkoutError ? (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                  {checkoutError}
+                </div>
+              ) : null}
+
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Submit sends your request directly to the Robostreaks Supabase inventory database.
+              </p>
             </div>
           </div>
         </div>
